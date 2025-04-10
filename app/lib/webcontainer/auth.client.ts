@@ -1,6 +1,6 @@
 /**
  * This client-only module that contains everything related to auth and is used
- * to avoid importing `@webcontainer/api` in the server bundle.
+ * with our FlyContainer implementation.
  */
 
-export { auth, type AuthAPI } from '@webcontainer/api';
+import { auth, type AuthAPI } from '~/lib/types/fly-container';

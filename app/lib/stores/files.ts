@@ -1,4 +1,4 @@
-import type { PathWatcherEvent, WebContainer } from '@webcontainer/api';
+import type { FlyContainer, PathWatcherEvent } from '~/lib/types/fly-container';
 import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
 import { Buffer } from 'node:buffer';
@@ -28,7 +28,7 @@ type Dirent = File | Folder;
 export type FileMap = Record<string, Dirent | undefined>;
 
 export class FilesStore {
-  #webcontainer: Promise<WebContainer>;
+  #webcontainer: Promise<FlyContainer>;
 
   /**
    * Tracks the number of files without folders.
@@ -51,7 +51,7 @@ export class FilesStore {
     return this.#size;
   }
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
+  constructor(webcontainerPromise: Promise<FlyContainer>) {
     this.#webcontainer = webcontainerPromise;
 
     if (import.meta.hot) {
@@ -139,16 +139,24 @@ export class FilesStore {
   async #init() {
     const webcontainer = await this.#webcontainer;
 
-    webcontainer.internal.watchPaths(
-      { include: [`${WORK_DIR}/**`], exclude: ['**/node_modules', '.git'], includeContent: true },
-      bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
-    );
+    // Use fs.watch instead of internal.watchPaths for FlyContainer
+    webcontainer.fs.watch(`${WORK_DIR}/**`, { persistent: true })
+      .then(watcher => {
+        // Set up event listener for file changes
+        webcontainer.on('file-change', (events) => {
+          this.#processEventBuffer([[events]]);
+        });
+      });
   }
 
-  #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
+  async #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
+    const webcontainer = await this.#webcontainer;
     const watchEvents = events.flat(2);
 
-    for (const { type, path, buffer } of watchEvents) {
+    for (const { type, path } of watchEvents) {
+      // Get file content if needed
+      let content = '';
+      let isBinary = false;
       // remove any trailing slashes
       const sanitizedPath = path.replace(/\/+$/g, '');
 
@@ -183,10 +191,15 @@ export class FilesStore {
            * The reason we do this is because we don't want to display binary files
            * in the editor nor allow to edit them.
            */
-          const isBinary = isBinaryFile(buffer);
-
-          if (!isBinary) {
-            content = this.#decodeFileContent(buffer);
+          // For FlyContainer, we'll need to read the file content separately
+          const filePath = sanitizedPath.startsWith('/') ? sanitizedPath : `/${sanitizedPath}`;
+          
+          try {
+            // Read file content as string
+            content = await webcontainer.fs.readFile(filePath, 'utf-8');
+            isBinary = false; // Assume text files for now
+          } catch (error) {
+            console.error(`Error reading file ${filePath}:`, error);
           }
 
           this.files.setKey(sanitizedPath, { type: 'file', content, isBinary });

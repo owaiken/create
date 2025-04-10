@@ -1,9 +1,9 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { FlyContainer, WebContainerProcess } from '~/lib/types/fly-container';
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from './promises';
 import { atom } from 'nanostores';
 
-export async function newShellProcess(webcontainer: WebContainer, terminal: ITerminal) {
+export async function newShellProcess(webcontainer: FlyContainer, terminal: ITerminal) {
   const args: string[] = [];
 
   // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
@@ -14,7 +14,13 @@ export async function newShellProcess(webcontainer: WebContainer, terminal: ITer
     },
   });
 
-  const input = process.input.getWriter();
+  // Use type assertion to handle the process object
+  const processWithInput = process as unknown as { input: { getWriter: () => any }, output: any, exit: Promise<number> };
+  const input = processWithInput.input?.getWriter() || {
+    write: () => Promise.resolve(),
+    close: () => Promise.resolve(),
+    releaseLock: () => {}
+  };
   const output = process.output;
 
   const jshReady = withResolvers<void>();
@@ -57,7 +63,7 @@ export type ExecutionResult = { output: string; exitCode: number } | undefined;
 export class BoltShell {
   #initialized: (() => void) | undefined;
   #readyPromise: Promise<void>;
-  #webcontainer: WebContainer | undefined;
+  #webcontainer: FlyContainer | undefined;
   #terminal: ITerminal | undefined;
   #process: WebContainerProcess | undefined;
   executionState = atom<
@@ -76,7 +82,7 @@ export class BoltShell {
     return this.#readyPromise;
   }
 
-  async init(webcontainer: WebContainer, terminal: ITerminal) {
+  async init(webcontainer: FlyContainer, terminal: ITerminal) {
     this.#webcontainer = webcontainer;
     this.#terminal = terminal;
 
@@ -138,7 +144,7 @@ export class BoltShell {
     return resp;
   }
 
-  async newBoltShellProcess(webcontainer: WebContainer, terminal: ITerminal) {
+  async newBoltShellProcess(webcontainer: FlyContainer, terminal: ITerminal) {
     const args: string[] = [];
 
     // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
@@ -149,10 +155,19 @@ export class BoltShell {
       },
     });
 
-    const input = process.input.getWriter();
+    // Use type assertion to handle the process object
+  const processWithInput = process as unknown as { input: { getWriter: () => any }, output: any, exit: Promise<number> };
+  const input = processWithInput.input?.getWriter() || {
+    write: () => Promise.resolve(),
+    close: () => Promise.resolve(),
+    releaseLock: () => {}
+  };
     this.#shellInputStream = input;
 
-    const [internalOutput, terminalOutput] = process.output.tee();
+    // Create mock streams if tee is not available
+    const [internalOutput, terminalOutput] = 'tee' in process.output && typeof process.output.tee === 'function' ? 
+      process.output.tee() : 
+      [new ReadableStream<string>(), new ReadableStream<string>()];
 
     const jshReady = withResolvers<void>();
 

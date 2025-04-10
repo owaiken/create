@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import type { FlyContainer } from '~/lib/types/fly-container';
 import { atom } from 'nanostores';
 
 // Extend Window interface to include our custom property
@@ -19,7 +19,7 @@ const PREVIEW_CHANNEL = 'preview-updates';
 
 export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
-  #webcontainer: Promise<WebContainer>;
+  #webcontainer: Promise<FlyContainer>;
   #broadcastChannel: BroadcastChannel;
   #lastUpdate = new Map<string, number>();
   #watchedFiles = new Set<string>();
@@ -29,7 +29,7 @@ export class PreviewsStore {
 
   previews = atom<PreviewInfo[]>([]);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
+  constructor(webcontainerPromise: Promise<FlyContainer>) {
     this.#webcontainer = webcontainerPromise;
     this.#broadcastChannel = new BroadcastChannel(PREVIEW_CHANNEL);
     this.#storageChannel = new BroadcastChannel('storage-sync-channel');
@@ -143,7 +143,8 @@ export class PreviewsStore {
     const webcontainer = await this.#webcontainer;
 
     // Listen for server ready events
-    webcontainer.on('server-ready', (port, url) => {
+    webcontainer.on('server-ready', (message: any) => {
+      const { port, url } = message;
       console.log('[Preview] Server ready on port:', port, url);
       this.broadcastUpdate(url);
 
@@ -187,7 +188,8 @@ export class PreviewsStore {
     }
 
     // Listen for port events
-    webcontainer.on('port', (port, type, url) => {
+    webcontainer.on('port', (message: any) => {
+      const { port, type, url } = message;
       let previewInfo = this.#availablePreviews.get(port);
 
       if (type === 'close' && previewInfo) {
@@ -299,10 +301,10 @@ let previewsStore: PreviewsStore | null = null;
 export function usePreviewStore() {
   if (!previewsStore) {
     /*
-     * Initialize with a Promise that resolves to WebContainer
-     * This should match how you're initializing WebContainer elsewhere
+     * Initialize with a Promise that resolves to FlyContainer
+     * This should match how you're initializing FlyContainer elsewhere
      */
-    previewsStore = new PreviewsStore(Promise.resolve({} as WebContainer));
+    previewsStore = new PreviewsStore(Promise.resolve({} as FlyContainer));
   }
 
   return previewsStore;

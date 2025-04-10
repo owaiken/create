@@ -1,17 +1,17 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
+import type { FlyContainer, WebContainerProcess } from '~/lib/types/fly-container';
 import { atom, type WritableAtom } from 'nanostores';
 import type { ITerminal } from '~/types/terminal';
 import { newBoltShellProcess, newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
 
 export class TerminalStore {
-  #webcontainer: Promise<WebContainer>;
+  #webcontainer: Promise<FlyContainer>;
   #terminals: Array<{ terminal: ITerminal; process: WebContainerProcess }> = [];
   #boltTerminal = newBoltShellProcess();
 
   showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(true);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
+  constructor(webcontainerPromise: Promise<FlyContainer>) {
     this.#webcontainer = webcontainerPromise;
 
     if (import.meta.hot) {
@@ -47,7 +47,9 @@ export class TerminalStore {
 
   onTerminalResize(cols: number, rows: number) {
     for (const { process } of this.#terminals) {
-      process.resize({ cols, rows });
+      if (process.resize) {
+        process.resize({ cols, rows });
+      }
     }
   }
 }

@@ -3,8 +3,8 @@ import { useLoaderData } from '@remix-run/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // WebSocket endpoint for our Fly.io backend
-const FLY_BACKEND_URL = 'https://create-fly-backend.fly.dev';
-const WS_ENDPOINT = `wss://create-fly-backend.fly.dev/ws`;
+const FLY_BACKEND_URL = 'https://backend-thrumming-dream-7689.fly.dev';
+const WS_ENDPOINT = `wss://backend-thrumming-dream-7689.fly.dev/ws`;
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const previewId = params.id;
@@ -16,7 +16,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return json({ previewId });
 }
 
-export default function WebContainerPreview() {
+export default function FlyContainerPreview() {
   const { previewId } = useLoaderData<typeof loader>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const wsRef = useRef<WebSocket>();

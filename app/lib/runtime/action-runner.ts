@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import type { FlyContainer } from '~/lib/types/fly-container';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionAlert, BoltAction, FileHistory } from '~/types/actions';
@@ -64,7 +64,7 @@ class ActionCommandError extends Error {
 }
 
 export class ActionRunner {
-  #webcontainer: Promise<WebContainer>;
+  #webcontainer: Promise<FlyContainer>;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
   runnerId = atom<string>(`${Date.now()}`);
@@ -73,7 +73,7 @@ export class ActionRunner {
   buildOutput?: { path: string; exitCode: number; output: string };
 
   constructor(
-    webcontainerPromise: Promise<WebContainer>,
+    webcontainerPromise: Promise<FlyContainer>,
     getShellTerminal: () => BoltShell,
     onAlert?: (alert: ActionAlert) => void,
   ) {

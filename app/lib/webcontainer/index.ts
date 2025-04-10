@@ -3,7 +3,7 @@ import { WORK_DIR_NAME } from '~/utils/constants';
 import { cleanStackTrace } from '~/utils/stacktrace';
 
 // Fly.io backend URL
-const FLY_BACKEND_URL = 'https://create-fly-backend.fly.dev';
+const FLY_BACKEND_URL = 'https://backend-thrumming-dream-7689.fly.dev';
 
 // Type definitions to match WebContainer API
 interface FlyContainerContext {
@@ -13,8 +13,8 @@ interface FlyContainerContext {
 // Define a FlyContainer class that mimics WebContainer API
 class FlyContainer {
   workdir: string;
-  private eventListeners: Record<string, Array<(message: any) => void>> = {};
-  private previewId: string;
+  protected eventListeners: Record<string, Array<(message: any) => void>> = {};
+  protected previewId: string;
   
   constructor(workdir: string) {
     this.workdir = workdir;
@@ -28,7 +28,7 @@ class FlyContainer {
       if (!response.ok) {
         throw new Error(`Failed to read file: ${path}`);
       }
-      const data = await response.json();
+      const data = await response.json() as { content: string };
       return data.content;
     },
     
@@ -61,7 +61,7 @@ class FlyContainer {
       if (!response.ok) {
         throw new Error(`Failed to read directory: ${path}`);
       }
-      const data = await response.json();
+      const data = await response.json() as { entries: any[] };
       return data.entries;
     },
     
@@ -101,10 +101,10 @@ class FlyContainer {
       throw new Error(`Failed to execute command: ${command}`);
     }
     
-    const { processId } = await response.json();
+    const { processId } = await response.json() as { processId: string };
     
     // Create a WebSocket connection to receive process output
-    const ws = new WebSocket(`wss://create-fly-backend.fly.dev/ws?previewId=${this.previewId}`);
+    const ws = new WebSocket(`wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${this.previewId}`);
     
     // Return a process-like object
     return {
@@ -142,6 +142,69 @@ class FlyContainer {
               };
             })
           };
+        },
+        // Add tee method to split the output stream
+        tee: () => {
+          const stream = new ReadableStream<string>({
+            start(controller) {
+              ws.onmessage = (event) => {
+                try {
+                  const data = JSON.parse(event.data);
+                  if (data.processId === processId && data.type === 'process-output') {
+                    controller.enqueue(data.output);
+                  }
+                  if (data.processId === processId && data.type === 'process-completed') {
+                    controller.close();
+                    ws.close();
+                  }
+                } catch (error) {
+                  console.error('Error processing WebSocket message:', error);
+                  controller.error(error);
+                }
+              };
+            }
+          });
+          return stream.tee() as [ReadableStream<string>, ReadableStream<string>];
+        },
+        // Add getReader method
+        getReader: () => {
+          const stream = new ReadableStream<string>({
+            start(controller) {
+              ws.onmessage = (event) => {
+                try {
+                  const data = JSON.parse(event.data);
+                  if (data.processId === processId && data.type === 'process-output') {
+                    controller.enqueue(data.output);
+                  }
+                  if (data.processId === processId && data.type === 'process-completed') {
+                    controller.close();
+                    ws.close();
+                  }
+                } catch (error) {
+                  console.error('Error processing WebSocket message:', error);
+                  controller.error(error);
+                }
+              };
+            }
+          });
+          return stream.getReader();
+        }
+      },
+      // Add input property
+      input: {
+        getWriter: () => {
+          const stream = new WritableStream<string>({
+            write(chunk) {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  processId,
+                  type: 'process-input',
+                  input: chunk
+                }));
+              }
+            }
+          });
+          return stream.getWriter();
         }
       },
       exit: new Promise<number>((resolve) => {
@@ -186,6 +249,16 @@ class FlyContainer {
   getPreviewUrl() {
     return `${FLY_BACKEND_URL}/preview/${this.previewId}`;
   }
+  
+  // Public accessor for previewId
+  getPreviewId() {
+    return this.previewId;
+  }
+  
+  // Public accessor for event listeners
+  getEventListeners(event: string) {
+    return this.eventListeners[event] || [];
+  }
 }
 
 export const webcontainerContext: FlyContainerContext = import.meta.hot?.data.webcontainerContext ?? {
@@ -217,15 +290,16 @@ if (!import.meta.env.SSR) {
         const { workbenchStore } = await import('~/lib/stores/workbench');
 
         // Set up WebSocket connection for preview messages
-        const ws = new WebSocket(`wss://create-fly-backend.fly.dev/ws?previewId=${webcontainer.previewId}`);
+        const ws = new WebSocket(`wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${webcontainer.getPreviewId()}`);
         
         ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
             
             // Forward messages to registered listeners
-            if (webcontainer.eventListeners['preview-message']) {
-              for (const listener of webcontainer.eventListeners['preview-message']) {
+            const listeners = webcontainer.getEventListeners('preview-message');
+            if (listeners.length > 0) {
+              for (const listener of listeners) {
                 listener(message);
               }
             }
