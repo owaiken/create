@@ -140,13 +140,12 @@ export class FilesStore {
     const webcontainer = await this.#webcontainer;
 
     // Use fs.watch instead of internal.watchPaths for FlyContainer
-    webcontainer.fs.watch(`${WORK_DIR}/**`, { persistent: true })
-      .then(watcher => {
-        // Set up event listener for file changes
-        webcontainer.on('file-change', (events) => {
-          this.#processEventBuffer([[events]]);
-        });
+    webcontainer.fs.watch(`${WORK_DIR}/**`, { persistent: true }).then((watcher) => {
+      // Set up event listener for file changes
+      webcontainer.on('file-change', (events) => {
+        this.#processEventBuffer([[events]]);
       });
+    });
   }
 
   async #processEventBuffer(events: Array<[events: PathWatcherEvent[]]>) {
@@ -155,8 +154,9 @@ export class FilesStore {
 
     for (const { type, path } of watchEvents) {
       // Get file content if needed
-      let content = '';
+      const content = '';
       let isBinary = false;
+
       // remove any trailing slashes
       const sanitizedPath = path.replace(/\/+$/g, '');
 
@@ -193,7 +193,7 @@ export class FilesStore {
            */
           // For FlyContainer, we'll need to read the file content separately
           const filePath = sanitizedPath.startsWith('/') ? sanitizedPath : `/${sanitizedPath}`;
-          
+
           try {
             // Read file content as string
             content = await webcontainer.fs.readFile(filePath, 'utf-8');

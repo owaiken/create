@@ -10,7 +10,11 @@ export interface FlyContainer {
     rm: (path: string, options?: { recursive?: boolean }) => Promise<void>;
     watch: (pattern: string, options?: { persistent?: boolean }) => Promise<{ close: () => void }>;
   };
-  spawn: (command: string, args?: string[], options?: { cwd?: string, terminal?: { cols: number, rows: number } }) => Promise<{
+  spawn: (
+    command: string,
+    args?: string[],
+    options?: { cwd?: string; terminal?: { cols: number; rows: number } },
+  ) => Promise<{
     output: {
       pipeTo: (writable: WritableStream) => Promise<{ exitCode: Promise<number> }>;
     };
@@ -27,14 +31,18 @@ export interface PathWatcherEvent {
 }
 
 export interface WebContainerProcess {
-  output: {
-    pipeTo: (writable: WritableStream) => Promise<{ exitCode: Promise<number> }>;
-    getReader?: () => ReadableStreamDefaultReader<string>;
-    tee?: () => [ReadableStream<string>, ReadableStream<string>];
-  } | { pipeTo: (writable: WritableStream) => Promise<{ exitCode: Promise<number> }> };
-  input?: {
-    getWriter: () => WritableStreamDefaultWriter<string>;
-  } | any; // Make input more flexible to accommodate different implementations
+  output:
+    | {
+        pipeTo: (writable: WritableStream) => Promise<{ exitCode: Promise<number> }>;
+        getReader?: () => ReadableStreamDefaultReader<string>;
+        tee?: () => [ReadableStream<string>, ReadableStream<string>];
+      }
+    | { pipeTo: (writable: WritableStream) => Promise<{ exitCode: Promise<number> }> };
+  input?:
+    | {
+        getWriter: () => WritableStreamDefaultWriter<string>;
+      }
+    | any; // Make input more flexible to accommodate different implementations
   exit: Promise<number>;
   resize?: (dimensions: { cols: number; rows: number }) => void;
 }

@@ -15,11 +15,15 @@ export async function newShellProcess(webcontainer: FlyContainer, terminal: ITer
   });
 
   // Use type assertion to handle the process object
-  const processWithInput = process as unknown as { input: { getWriter: () => any }, output: any, exit: Promise<number> };
+  const processWithInput = process as unknown as {
+    input: { getWriter: () => any };
+    output: any;
+    exit: Promise<number>;
+  };
   const input = processWithInput.input?.getWriter() || {
     write: () => Promise.resolve(),
     close: () => Promise.resolve(),
-    releaseLock: () => {}
+    releaseLock: () => {},
   };
   const output = process.output;
 
@@ -156,18 +160,23 @@ export class BoltShell {
     });
 
     // Use type assertion to handle the process object
-  const processWithInput = process as unknown as { input: { getWriter: () => any }, output: any, exit: Promise<number> };
-  const input = processWithInput.input?.getWriter() || {
-    write: () => Promise.resolve(),
-    close: () => Promise.resolve(),
-    releaseLock: () => {}
-  };
+    const processWithInput = process as unknown as {
+      input: { getWriter: () => any };
+      output: any;
+      exit: Promise<number>;
+    };
+    const input = processWithInput.input?.getWriter() || {
+      write: () => Promise.resolve(),
+      close: () => Promise.resolve(),
+      releaseLock: () => {},
+    };
     this.#shellInputStream = input;
 
     // Create mock streams if tee is not available
-    const [internalOutput, terminalOutput] = 'tee' in process.output && typeof process.output.tee === 'function' ? 
-      process.output.tee() : 
-      [new ReadableStream<string>(), new ReadableStream<string>()];
+    const [internalOutput, terminalOutput] =
+      'tee' in process.output && typeof process.output.tee === 'function'
+        ? process.output.tee()
+        : [new ReadableStream<string>(), new ReadableStream<string>()];
 
     const jshReady = withResolvers<void>();
 

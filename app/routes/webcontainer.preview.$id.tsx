@@ -3,8 +3,8 @@ import { useLoaderData } from '@remix-run/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // WebSocket endpoint for our Fly.io backend
-const FLY_BACKEND_URL = 'https://backend-thrumming-dream-7689.fly.dev';
-const WS_ENDPOINT = `wss://backend-thrumming-dream-7689.fly.dev/ws`;
+const FLY_BACKEND_URL = 'https://create-fly-backend.fly.dev';
+const WS_ENDPOINT = `wss://create-fly-backend.fly.dev/ws`;
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const previewId = params.id;
@@ -38,12 +38,14 @@ export default function FlyContainerPreview() {
   // Notify server that this preview is ready
   const notifyPreviewReady = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && previewUrl) {
-      wsRef.current.send(JSON.stringify({
-        type: 'preview-ready',
-        previewId,
-        url: previewUrl,
-        timestamp: Date.now(),
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'preview-ready',
+          previewId,
+          url: previewUrl,
+          timestamp: Date.now(),
+        }),
+      );
     }
   }, [previewId, previewUrl]);
 
@@ -60,16 +62,18 @@ export default function FlyContainerPreview() {
     // Initialize WebSocket connection
     const ws = new WebSocket(`${WS_ENDPOINT}?previewId=${previewId}`);
     wsRef.current = ws;
-    
+
     ws.onopen = () => {
       console.log('WebSocket connected');
+
       // Notify server this preview is ready
       notifyPreviewReady();
     };
-    
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+
         if (data.previewId === previewId) {
           if (data.type === 'refresh-preview' || data.type === 'file-change') {
             handleRefresh();
@@ -79,7 +83,7 @@ export default function FlyContainerPreview() {
         console.error('Error parsing WebSocket message:', error);
       }
     };
-    
+
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
