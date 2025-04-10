@@ -2,7 +2,9 @@ import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { useLoaderData } from '@remix-run/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const PREVIEW_CHANNEL = 'preview-updates';
+// WebSocket endpoint for our Fly.io backend
+const FLY_BACKEND_URL = 'https://create-fly-backend.fly.dev';
+const WS_ENDPOINT = `wss://create-fly-backend.fly.dev/ws`;
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const previewId = params.id;
@@ -17,7 +19,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
 export default function WebContainerPreview() {
   const { previewId } = useLoaderData<typeof loader>();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const broadcastChannelRef = useRef<BroadcastChannel>();
+  const wsRef = useRef<WebSocket>();
   const [previewUrl, setPreviewUrl] = useState('');
 
   // Handle preview refresh
@@ -33,33 +35,21 @@ export default function WebContainerPreview() {
     }
   }, [previewUrl]);
 
-  // Notify other tabs that this preview is ready
+  // Notify server that this preview is ready
   const notifyPreviewReady = useCallback(() => {
-    if (broadcastChannelRef.current && previewUrl) {
-      broadcastChannelRef.current.postMessage({
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && previewUrl) {
+      wsRef.current.send(JSON.stringify({
         type: 'preview-ready',
         previewId,
         url: previewUrl,
         timestamp: Date.now(),
-      });
+      }));
     }
   }, [previewId, previewUrl]);
 
   useEffect(() => {
-    // Initialize broadcast channel
-    broadcastChannelRef.current = new BroadcastChannel(PREVIEW_CHANNEL);
-
-    // Listen for preview updates
-    broadcastChannelRef.current.onmessage = (event) => {
-      if (event.data.previewId === previewId) {
-        if (event.data.type === 'refresh-preview' || event.data.type === 'file-change') {
-          handleRefresh();
-        }
-      }
-    };
-
-    // Construct the WebContainer preview URL
-    const url = `https://${previewId}.local-credentialless.webcontainer-api.io`;
+    // Construct the Fly.io preview URL
+    const url = `${FLY_BACKEND_URL}/preview/${previewId}`;
     setPreviewUrl(url);
 
     // Set the iframe src
@@ -67,12 +57,36 @@ export default function WebContainerPreview() {
       iframeRef.current.src = url;
     }
 
-    // Notify other tabs that this preview is ready
-    notifyPreviewReady();
+    // Initialize WebSocket connection
+    const ws = new WebSocket(`${WS_ENDPOINT}?previewId=${previewId}`);
+    wsRef.current = ws;
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      // Notify server this preview is ready
+      notifyPreviewReady();
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.previewId === previewId) {
+          if (data.type === 'refresh-preview' || data.type === 'file-change') {
+            handleRefresh();
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
 
     // Cleanup
     return () => {
-      broadcastChannelRef.current?.close();
+      ws.close();
     };
   }, [previewId, handleRefresh, notifyPreviewReady]);
 
@@ -80,7 +94,7 @@ export default function WebContainerPreview() {
     <div className="w-full h-full">
       <iframe
         ref={iframeRef}
-        title="WebContainer Preview"
+        title="Preview"
         className="w-full h-full border-none"
         sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin"
         allow="cross-origin-isolated"
