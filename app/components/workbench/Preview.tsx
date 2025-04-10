@@ -59,6 +59,7 @@ export const Preview = memo(() => {
 
   useEffect(() => {
     if (!activePreview) {
+      console.log('[Preview] No active preview available');
       setUrl('');
       setIframeUrl(undefined);
 
@@ -66,9 +67,15 @@ export const Preview = memo(() => {
     }
 
     const { baseUrl } = activePreview;
+    console.log('[Preview] Setting preview URL:', baseUrl);
     setUrl(baseUrl);
     setIframeUrl(baseUrl);
   }, [activePreview]);
+  
+  // Debug log for previews
+  useEffect(() => {
+    console.log('[Preview] Available previews:', previews);
+  }, [previews]);
 
   const validateUrl = useCallback(
     (value: string) => {

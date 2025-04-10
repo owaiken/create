@@ -330,10 +330,17 @@ if (!import.meta.env.SSR) {
         const previewId = webcontainer.getPreviewId();
         const flyBackendPreviewUrl = `${FLY_BACKEND_URL}/preview/${previewId}`;
         
-        // Emit server-ready event with the Fly.io backend URL
-        setTimeout(() => {
+        console.log('[FlyContainer] Preview ID:', previewId);
+        console.log('[FlyContainer] Backend Preview URL:', flyBackendPreviewUrl);
+        
+        // Emit server-ready event with the Fly.io backend URL immediately
+        // and also after a short delay to ensure listeners are registered
+        const emitServerReady = () => {
           const serverReadyListeners = webcontainer.getEventListeners('server-ready');
+          console.log('[FlyContainer] Server ready listeners count:', serverReadyListeners.length);
+          
           if (serverReadyListeners.length > 0) {
+            console.log('[FlyContainer] Emitting server-ready event');
             for (const listener of serverReadyListeners) {
               listener({
                 port: 4321,  // Use a standard port for consistency
@@ -341,8 +348,40 @@ if (!import.meta.env.SSR) {
                 previewId: previewId
               });
             }
+          } else {
+            console.log('[FlyContainer] No server-ready listeners found, will retry');
+            // If no listeners, try again after a short delay
+            setTimeout(emitServerReady, 1000);
           }
-        }, 1000); // Short delay to ensure listeners are registered
+        };
+        
+        // Try to emit immediately
+        emitServerReady();
+        
+        // Also force a server-ready event after 2 seconds as a fallback
+        setTimeout(async () => {
+          console.log('[FlyContainer] Forcing server-ready event emission');
+          try {
+            // Force emit a server-ready event directly
+            // Get the previews store instance
+            const { workbenchStore } = await import('~/lib/stores/workbench');
+            const previews = workbenchStore.previews.get();
+            console.log('[FlyContainer] Current previews:', previews);
+            
+            // Manually add a preview if none exists
+            if (previews.length === 0) {
+              console.log('[FlyContainer] Adding preview manually');
+              workbenchStore.previews.set([{
+                port: 4321,
+                ready: true,
+                baseUrl: flyBackendPreviewUrl
+              }]);
+              console.log('[FlyContainer] Forced preview added');
+            }
+          } catch (error) {
+            console.error('[FlyContainer] Error forcing preview:', error);
+          }
+        }, 2000);
 
         ws.onmessage = (event) => {
           try {
