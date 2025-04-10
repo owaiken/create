@@ -15,6 +15,18 @@ class FlyContainer {
   workdir: string;
   protected eventListeners: Record<string, Array<(message: any) => void>> = {};
   protected previewId: string;
+  
+  // Method to emit events
+  emit(eventName: string, data: any) {
+    const listeners = this.eventListeners[eventName] || [];
+    listeners.forEach((listener) => {
+      try {
+        listener(data);
+      } catch (error) {
+        console.error(`Error in ${eventName} event listener:`, error);
+      }
+    });
+  }
 
   constructor(workdir: string) {
     this.workdir = workdir;
@@ -122,6 +134,17 @@ class FlyContainer {
 
     // Create a WebSocket connection to receive process output
     const ws = new WebSocket(`wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${this.previewId}`);
+    
+    // Add error handling for WebSocket
+    ws.onerror = (error) => {
+      console.error(`WebSocket error for process ${processId}:`, error);
+      this.emit('error', { error: 'WebSocket connection error', processId });
+    };
+    
+    // Add open handler
+    ws.onopen = () => {
+      console.log(`WebSocket connection established for process ${processId}`);
+    };
 
     // Return a process-like object with input support
     return {
@@ -342,6 +365,38 @@ if (!import.meta.env.SSR) {
         const ws = new WebSocket(
           `wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${webcontainer.getPreviewId()}`,
         );
+        
+        // Add error handling for WebSocket
+        ws.onerror = (error) => {
+          console.error(`WebSocket error for preview connection:`, error);
+          webcontainer.emit('error', { error: 'WebSocket connection error', type: 'preview' });
+        };
+        
+        // Add open handler
+        ws.onopen = () => {
+          console.log(`WebSocket connection established for preview`);
+        };
+        
+        // Add reconnection logic
+        ws.onclose = (event) => {
+          console.log(`WebSocket connection closed: code=${event.code}, reason=${event.reason}`);
+          
+          // Attempt to reconnect if not a normal closure
+          if (event.code !== 1000 && event.code !== 1001) {
+            console.log('Attempting to reconnect WebSocket in 3 seconds...');
+            setTimeout(() => {
+              console.log('Reconnecting WebSocket...');
+              const newWs = new WebSocket(
+                `wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${webcontainer.getPreviewId()}`,
+              );
+              // Transfer event handlers to new WebSocket
+              newWs.onmessage = ws.onmessage;
+              newWs.onerror = ws.onerror;
+              newWs.onopen = ws.onopen;
+              newWs.onclose = ws.onclose;
+            }, 3000);
+          }
+        };
         
         // Emit server-ready event with Fly.io backend URL
         const previewId = webcontainer.getPreviewId();
