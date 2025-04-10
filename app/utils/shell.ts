@@ -6,8 +6,8 @@ import { atom } from 'nanostores';
 export async function newShellProcess(webcontainer: FlyContainer, terminal: ITerminal) {
   const args: string[] = [];
 
-  // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-  const process = await webcontainer.spawn('/bin/jsh', ['--osc', ...args], {
+  // Use bash instead of jsh for compatibility with Fly.io backend
+  const process = await webcontainer.spawn('/bin/bash', [...args], {
     terminal: {
       cols: terminal.cols ?? 80,
       rows: terminal.rows ?? 15,
@@ -152,7 +152,7 @@ export class BoltShell {
     const args: string[] = [];
 
     // we spawn a JSH process with a fallback cols and rows in case the process is not attached yet to a visible terminal
-    const process = await webcontainer.spawn('/bin/jsh', ['--osc', ...args], {
+    const process = await webcontainer.spawn('/bin/bash', [...args], {
       terminal: {
         cols: terminal.cols ?? 80,
         rows: terminal.rows ?? 15,

@@ -102,7 +102,7 @@ class FlyContainer {
   };
 
   // Process execution
-  async spawn(command: string, args: string[] = [], options?: { cwd?: string }) {
+  async spawn(command: string, args: string[] = [], options?: { cwd?: string; terminal?: { cols: number; rows: number } }) {
     const response = await fetch(`${FLY_BACKEND_URL}/api/execute/${this.previewId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,6 +110,7 @@ class FlyContainer {
         command,
         args,
         cwd: options?.cwd || '/',
+        terminal: options?.terminal || null,
       }),
     });
 
@@ -122,8 +123,42 @@ class FlyContainer {
     // Create a WebSocket connection to receive process output
     const ws = new WebSocket(`wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${this.previewId}`);
 
-    // Return a process-like object
+    // Return a process-like object with input support
     return {
+      input: {
+        getWriter: () => {
+          return {
+            write: (data: string) => {
+              // Send terminal input via WebSocket
+              if (ws.readyState === WebSocket.OPEN) {
+                console.log(`Sending terminal input to process ${processId}: ${data.length} characters`);
+                ws.send(JSON.stringify({
+                  type: 'terminal-input',
+                  processId,
+                  input: data
+                }));
+              }
+            },
+            close: () => {
+              // Nothing to do here
+            },
+            releaseLock: () => {
+              // Nothing to do here
+            }
+          };
+        }
+      },
+      resize: (dimensions: { cols: number; rows: number }) => {
+        // Send terminal resize event via WebSocket
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'terminal-resize',
+            processId,
+            cols: dimensions.cols,
+            rows: dimensions.rows
+          }));
+        }
+      },
       output: {
         pipeTo: async (writable: WritableStream) => {
           const writer = writable.getWriter();
@@ -216,25 +251,7 @@ class FlyContainer {
         },
       },
 
-      // Add input property
-      input: {
-        getWriter: () => {
-          const stream = new WritableStream<string>({
-            write(chunk) {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(
-                  JSON.stringify({
-                    processId,
-                    type: 'process-input',
-                    input: chunk,
-                  }),
-                );
-              }
-            },
-          });
-          return stream.getWriter();
-        },
-      },
+      // Input property is already defined above, so we'll remove this duplicate
       exit: new Promise<number>((resolve) => {
         ws.onmessage = (event) => {
           try {
