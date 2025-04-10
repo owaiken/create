@@ -325,6 +325,24 @@ if (!import.meta.env.SSR) {
         const ws = new WebSocket(
           `wss://${FLY_BACKEND_URL.replace('https://', '')}/ws?previewId=${webcontainer.getPreviewId()}`,
         );
+        
+        // Emit server-ready event with Fly.io backend URL
+        const previewId = webcontainer.getPreviewId();
+        const flyBackendPreviewUrl = `${FLY_BACKEND_URL}/preview/${previewId}`;
+        
+        // Emit server-ready event with the Fly.io backend URL
+        setTimeout(() => {
+          const serverReadyListeners = webcontainer.getEventListeners('server-ready');
+          if (serverReadyListeners.length > 0) {
+            for (const listener of serverReadyListeners) {
+              listener({
+                port: 4321,  // Use a standard port for consistency
+                url: flyBackendPreviewUrl,
+                previewId: previewId
+              });
+            }
+          }
+        }, 1000); // Short delay to ensure listeners are registered
 
         ws.onmessage = (event) => {
           try {

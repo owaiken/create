@@ -145,8 +145,10 @@ export class PreviewsStore {
     // Listen for server ready events
     webcontainer.on('server-ready', (message: any) => {
       const { port, url } = message;
-      console.log('[Preview] Server ready on port:', port, url);
-      this.broadcastUpdate(url);
+      // Replace localhost URL with Fly.io backend URL
+      const flyBackendUrl = `https://create-fly-backend.fly.dev/preview/${message.previewId}`;
+      console.log('[Preview] Server ready on port:', port, 'Using Fly.io URL:', flyBackendUrl);
+      this.broadcastUpdate(flyBackendUrl);
 
       // Initial storage sync when preview is ready
       this._broadcastStorageSync();
